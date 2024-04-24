@@ -28,12 +28,13 @@
  * application functionalities such as user management and session control.
  */
 
-
 import { sendEmail } from './emailHandler';
-
 
 // Hashing algorithm used for securing passwords. Using bcrypt is not practical in a Worker environment.
 const hashingAlgo = 'SHA-256';
+
+// Host domain name
+const domain = 'veloxio.us';
 
 // Defines the environment variables required by the worker.
 export interface Env {
@@ -50,11 +51,11 @@ export interface Env {
 
 // CORS headers configuration to support cross-origin requests.
 const corsHeaders: { [key: string]: string } = {
-	"Access-Control-Allow-Origin": "*",
-	"Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-	"Access-Control-Max-Age": "86400",
-	"Access-Control-Allow-Credentials": "true",
-}
+	'Access-Control-Allow-Origin': '*',
+	'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
+	'Access-Control-Max-Age': '86400',
+	'Access-Control-Allow-Credentials': 'true',
+};
 
 // Main worker class handling incoming requests and routing them to appropriate handlers.
 export default {
@@ -68,13 +69,13 @@ export default {
 		console.log('Last path:', lastPath);
 
 		// Handle CORS preflight requests.
-		if (request.method === "OPTIONS") {
-			response = handleOptions(request)
+		if (request.method === 'OPTIONS') {
+			response = handleOptions(request);
 		} else {
 			switch (lastPath) {
 				case '/register':
 					response = await handleRegister(request, env);
-					break
+					break;
 				case '/login':
 					response = await handleLogin(request, env);
 					break;
@@ -98,9 +99,9 @@ export default {
 			}
 		}
 		// Append CORS headers to the response before returning.
-		response.headers.set("Access-Control-Allow-Origin", getValidatedOrigin(request) || "*")
-		response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		response.headers.set("Access-Control-Allow-Credentials", "true")
+		response.headers.set('Access-Control-Allow-Origin', getValidatedOrigin(request) || '*');
+		response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+		response.headers.set('Access-Control-Allow-Credentials', 'true');
 		return response;
 	},
 };
@@ -114,8 +115,8 @@ async function handleLoadUser(request: Request, env: Env): Promise<Response> {
 	// Parse the cookies to find the session ID
 	let sessionId = null;
 	if (cookieHeader) {
-		const cookies = cookieHeader.split(';').map(cookie => cookie.trim());
-		const sessionCookie = cookies.find(cookie => cookie.startsWith('cfw_session='));
+		const cookies = cookieHeader.split(';').map((cookie) => cookie.trim());
+		const sessionCookie = cookies.find((cookie) => cookie.startsWith('cfw_session='));
 		if (sessionCookie) {
 			sessionId = sessionCookie.split('=')[1];
 		}
@@ -123,7 +124,7 @@ async function handleLoadUser(request: Request, env: Env): Promise<Response> {
 
 	if (sessionId) {
 		// Call the session retrieval endpoint of the other worker
-		const loadSessionUrl = `https://session-state.d1.compact.workers.dev/get/${sessionId}`;
+		const loadSessionUrl = `https://session-state.${domain}/get/${sessionId}`;
 		const loadRequest = new Request(loadSessionUrl);
 		const loadResponse = await env.sessionService.fetch(loadRequest);
 		const sessionData = await loadResponse.json();
@@ -131,8 +132,8 @@ async function handleLoadUser(request: Request, env: Env): Promise<Response> {
 		return new Response(JSON.stringify(sessionData), {
 			headers: {
 				'Access-Control-Allow-Origin': getValidatedOrigin(request) || '*',
-				'Content-Type': 'application/json'
-			}
+				'Content-Type': 'application/json',
+			},
 		});
 	}
 	return new Response(JSON.stringify({ error: 'User not logged in' }), { status: 401 });
@@ -142,7 +143,7 @@ async function handleLoadUser(request: Request, env: Env): Promise<Response> {
 async function handleRegister(request: Request, env: Env): Promise<Response> {
 	try {
 		// Parse user data from the request body
-		const regData = await request.json() as RegistrationData;
+		const regData = (await request.json()) as RegistrationData;
 		const { username, password, firstName, lastName } = regData;
 
 		// Basic validation
@@ -174,7 +175,7 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
 
 // Authenticates users by validating credentials and creating a session on successful login.
 async function handleLogin(request: Request, env: Env): Promise<Response> {
-	const credentials = await request.json() as Credentials;
+	const credentials = (await request.json()) as Credentials;
 
 	// Now credentials is typed as Credentials
 	const { username, password } = credentials;
@@ -183,7 +184,6 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 			const query = 'SELECT * FROM User WHERE Username = ?1';
 			const result = (await env.usersDB.prepare(query).bind(username).all()).results;
 			if (result.length > 0) {
-
 				const user = result[0];
 				// Compare the provided password with the stored hash
 				const passwordMatch = await comparePassword(password, user.Password as string);
@@ -200,7 +200,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 				// Load any additional user data from the database or other sources to be stored in the session
 
 				// Create a session
-				const sessionCreationRequest = new Request("https://session-state.d1.compact.workers.dev/create", {
+				const sessionCreationRequest = new Request(`https://session-state.${domain}/create`, {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
@@ -213,15 +213,14 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 				const headers = new Headers({
 					'Access-Control-Allow-Origin': getValidatedOrigin(request) || '*',
 					'Content-Type': 'application/json',
-					'Set-Cookie': `cfw_session=${sessionId}; Secure; Path=/; SameSite=None; Max-Age=${60 * 30}`
-
+					'Set-Cookie': `cfw_session=${sessionId}; Secure; Path=/; SameSite=None; Max-Age=${60 * 30}`,
 				});
 
 				return new Response(JSON.stringify({ message: 'Login successful' }), { headers });
 			}
 		}
 	} catch (error) {
-		console.error("Unexpected error: " + error);
+		console.error('Unexpected error: ' + error);
 	}
 	return new Response(JSON.stringify({ error: 'Login failed' }), { status: 401 });
 }
@@ -234,8 +233,8 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
 	// Parse the cookies to find the session ID
 	let sessionId = null;
 	if (cookieHeader) {
-		const cookies = cookieHeader.split(';').map(cookie => cookie.trim());
-		const sessionCookie = cookies.find(cookie => cookie.startsWith('cfw_session='));
+		const cookies = cookieHeader.split(';').map((cookie) => cookie.trim());
+		const sessionCookie = cookies.find((cookie) => cookie.startsWith('cfw_session='));
 		if (sessionCookie) {
 			sessionId = sessionCookie.split('=')[1];
 		}
@@ -243,14 +242,14 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
 
 	if (sessionId) {
 		// Call the session deletion endpoint of the other worker
-		const deleteSessionUrl = `https://session-state.d1.compact.workers.dev/delete/${sessionId}`;
+		const deleteSessionUrl = `https://session-state.${domain}/delete/${sessionId}`;
 		const deleteRequest = new Request(deleteSessionUrl, { method: 'DELETE' });
 		await env.sessionService.fetch(deleteRequest);
 	}
 
 	// Clear the session cookie in the response
 	const headers = new Headers({
-		'Set-Cookie': 'cfw_session=; HttpOnly; Secure; SameSite=Strict; Max-Age=0'
+		'Set-Cookie': 'cfw_session=; HttpOnly; Secure; SameSite=Strict; Max-Age=0',
 	});
 
 	return new Response(JSON.stringify({ message: 'Logout successful' }), { headers });
@@ -258,7 +257,7 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
 
 // Placeholder for initiating the password reset process.
 async function handleForgotPassword(request: Request, env: Env): Promise<Response> {
-	const { username } = await request.json() as { username: string };
+	const { username } = (await request.json()) as { username: string };
 	console.log('Initiating password reset for username:', username);
 	// Initiate password reset process
 	// load user by email
@@ -289,7 +288,7 @@ async function handleForgotPassword(request: Request, env: Env): Promise<Respons
 }
 
 async function handleForgotPasswordValidate(request: Request, env: Env): Promise<Response> {
-	const { token } = await request.json() as { token: string };
+	const { token } = (await request.json()) as { token: string };
 	// validate token
 	const query = 'SELECT * FROM User WHERE ResetToken = ?';
 	const result = (await env.usersDB.prepare(query).bind(token).all()).results;
@@ -310,7 +309,7 @@ async function handleForgotPasswordValidate(request: Request, env: Env): Promise
 }
 
 async function handleForgotPasswordNewPassword(request: Request, env: Env): Promise<Response> {
-	const { token, password } = await request.json() as { token: string, password: string };
+	const { token, password } = (await request.json()) as { token: string; password: string };
 	// validate token
 	const query = 'SELECT * FROM User WHERE ResetToken = ?';
 	const result = (await env.usersDB.prepare(query).bind(token).all()).results;
@@ -331,7 +330,7 @@ async function hashPassword(password: string): Promise<string> {
 	const data = new TextEncoder().encode(salt + password);
 	const hashBuffer = await crypto.subtle.digest({ name: hashingAlgo }, data);
 	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+	const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 	return `${salt}:${hashHex}`;
 }
 
@@ -344,7 +343,7 @@ async function comparePassword(providedPassword: string, storedHash: string): Pr
 	const data = new TextEncoder().encode(salt + providedPassword);
 	const hashBuffer = await crypto.subtle.digest({ name: hashingAlgo }, data);
 	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+	const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 
 	// Compare the newly generated hash with the original hash
 	return hashHex === originalHash;
@@ -356,18 +355,18 @@ function handleOptions(request: Request): Response {
 	// for this to be a valid pre-flight request
 	let headers = request.headers;
 	if (
-		headers.get("Origin") !== null &&
-		headers.get("Access-Control-Request-Method") !== null &&
-		headers.get("Access-Control-Request-Headers") !== null
+		headers.get('Origin') !== null &&
+		headers.get('Access-Control-Request-Method') !== null &&
+		headers.get('Access-Control-Request-Headers') !== null
 	) {
 		// Handle CORS pre-flight request.
 		let respHeaders: { [key: string]: string } = {
 			...corsHeaders,
-			"Access-Control-Allow-Headers": headers.get("Access-Control-Request-Headers") || "",
+			'Access-Control-Allow-Headers': headers.get('Access-Control-Request-Headers') || '',
 		};
-		respHeaders["Content-Type"] = "text/plain";
-		respHeaders["X-Content-Type-Options"] = "nosniff";
-		respHeaders["Access-Control-Allow-Origin"] = getValidatedOrigin(request) || "*";
+		respHeaders['Content-Type'] = 'text/plain';
+		respHeaders['X-Content-Type-Options'] = 'nosniff';
+		respHeaders['Access-Control-Allow-Origin'] = getValidatedOrigin(request) || '*';
 		return new Response(null, {
 			headers: respHeaders,
 		});
@@ -375,8 +374,8 @@ function handleOptions(request: Request): Response {
 		// Handle standard OPTIONS request.
 		return new Response(null, {
 			headers: {
-				"Allow": "GET, HEAD, POST, OPTIONS",
-				"Content-Type": "text/plain"
+				Allow: 'GET, HEAD, POST, OPTIONS',
+				'Content-Type': 'text/plain',
 			},
 		});
 	}
@@ -385,12 +384,12 @@ function handleOptions(request: Request): Response {
 // Validates the origin of a request to enforce CORS policy.
 // This is a basic example and should be extended to include a list of allowed origins.
 function getValidatedOrigin(request: Request): string | null {
-	const origin = request.headers.get("Origin");
+	const origin = request.headers.get('Origin');
 	if (origin === null) {
 		return null;
 	}
 	const url = new URL(origin);
-	if (url.protocol === "http:" || url.protocol === "https:") {
+	if (url.protocol === 'http:' || url.protocol === 'https:') {
 		// You could also validate the hostname against a list of allowed known good origins.
 		return origin;
 	} else {

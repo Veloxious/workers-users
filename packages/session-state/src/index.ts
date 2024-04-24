@@ -4,7 +4,7 @@
  * with each session identified by a unique session ID. Sessions are stored in a Cloudflare KV namespace.
  *
  * The `Env` interface represents the expected environment configuration,
- * containing the `sessionstore` KVNamespace for session data storage.
+ * containing the `sessionstore_bdcy` KVNamespace for session data storage.
  *
  * Functions:
  * - `generateSessionId`: Generates a unique session identifier using `crypto.randomUUID`.
@@ -19,9 +19,8 @@
  *
  */
 
-
 export interface Env {
-	sessionstore: KVNamespace;
+	sessionstore_bdcy: KVNamespace;
 }
 
 function generateSessionId(): string {
@@ -35,16 +34,16 @@ function generateSessionId(): string {
 async function createSession(data: any, env: Env): Promise<string> {
 	const sessionId = generateSessionId();
 	try {
-		await env.sessionstore.put(sessionId, JSON.stringify(data));
+		await env.sessionstore_bdcy.put(sessionId, JSON.stringify(data));
 	} catch (error) {
-		console.error("Error creating session: " + error);
+		console.error('Error creating session: ' + error);
 	}
 	return sessionId;
 }
 
 // Update session data in the KV store
 async function updateSession(sessionId: string, data: any, env: Env): Promise<void> {
-	await env.sessionstore.put(sessionId, JSON.stringify(data));
+	await env.sessionstore_bdcy.put(sessionId, JSON.stringify(data));
 }
 
 // Add data to an existing session
@@ -55,13 +54,13 @@ async function addToSession(sessionId: string, data: any, env: Env): Promise<voi
 
 // Retrieve session data from the KV store
 async function getSessionData(sessionId: string, env: Env): Promise<any> {
-	const data = await env.sessionstore.get(sessionId);
+	const data = await env.sessionstore_bdcy.get(sessionId);
 	return data ? JSON.parse(data) : null;
 }
 
 // Delete a session from the KV store
 async function deleteSession(sessionId: string, env: Env): Promise<void> {
-	await env.sessionstore.delete(sessionId);
+	await env.sessionstore_bdcy.delete(sessionId);
 }
 
 export default {
@@ -74,22 +73,19 @@ export default {
 				const requestData = await request.json();
 				const sessionId = await createSession(requestData, env);
 				return new Response(sessionId);
-
 			} else if (path.startsWith('/get/') && request.method === 'GET') {
 				const sessionId = path.split('/')[2];
 				const data = await getSessionData(sessionId, env);
 				return new Response(JSON.stringify(data));
-
 			} else if (path.startsWith('/delete/') && request.method === 'DELETE') {
 				const sessionId = path.split('/')[2];
 				await deleteSession(sessionId, env);
 				return new Response('Session deleted');
-
 			} else {
 				return new Response('Invalid request', { status: 404 });
 			}
 		} catch (error) {
-			console.error("Error processing request: " + error);
+			console.error('Error processing request: ' + error);
 			return new Response('Error processing request', { status: 500 });
 		}
 	},

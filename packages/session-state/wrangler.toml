@@ -1,10 +1,10 @@
-name = "session-state"
+name = "session-state-bdcy"
 main = "src/index.ts"
 compatibility_date = "2024-01-17"
 
 [[kv_namespaces]]
-binding = "sessionstore"
-id = "988f705000cb4618bed4bc878d9d618e"
+binding = "sessionstore_bdcy"
+id = "35fb53df73a744b0ba35f47e81884bce"
 
 [dev]
 port = 51511
