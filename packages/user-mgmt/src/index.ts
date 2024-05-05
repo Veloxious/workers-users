@@ -195,6 +195,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 					username: user.Username,
 					firstName: user.FirstName,
 					lastName: user.LastName,
+					// expirationTTL: 600, // Optional: set a custom expiration time-to-live for the session
 				};
 
 				// Load any additional user data from the database or other sources to be stored in the session
